@@ -6,6 +6,7 @@
     "dist",
     "**/*spec.ts",
     "prisma7.config.ts",
-    "tsconfig.build.json"
+    "tsconfig.build.json",
+    "prisma"
   ]
 }
