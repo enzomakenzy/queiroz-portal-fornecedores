@@ -1,0 +1,25 @@
+{
+  "name": "queiroz-portal-fornecedores",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "docker:dev": "docker compose up -d --wait",
+    "docker:dev:down": "docker compose down",
+    "docker:prod": "docker compose --profile production up -d --build",
+    "docker:prod:down": "docker compose --profile production down"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/enzomakenzy/queiroz-portal-fornecedores.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/enzomakenzy/queiroz-portal-fornecedores/issues"
+  },
+  "homepage": "https://github.com/enzomakenzy/queiroz-portal-fornecedores#readme"
+}

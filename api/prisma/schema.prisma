@@ -1,0 +1,53 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum SpeciesType {
+  O // Obligation (Queiroz owes the supplier)
+  D // Right (Supplier owes Queiroz)
+
+  @@map("obrigdireito_enum")
+}
+
+model Supplier {
+  id          Int    @id @map("seqpessoa")
+  companyName String @map("nomerazao")
+  password    String @map("senha")
+
+  titles Title[]
+
+  @@map("fornecedores")
+}
+
+model Species {
+  code        String      @id @map("codespecie")
+  description String      @map("descricao")
+  type        SpeciesType @map("obrigdireito")
+
+  titles Title[]
+
+  @@map("especies")
+}
+
+model Title {
+  id           Int      @id @map("seqtitulo")
+  issueDate    DateTime @map("dtaemissao") @db.Date
+  dueDate      DateTime @map("dtavencimento") @db.Date
+  nominalValue Decimal  @map("vlrnominal") @db.Decimal(10, 2)
+  paidValue    Decimal  @map("vlrpago") @db.Decimal(10, 2)
+
+  supplier    Supplier @relation(fields: [supplierId], references: [id])
+  supplierId  Int      @map("seqpessoa")
+  species     Species  @relation(fields: [speciesCode], references: [code])
+  speciesCode String   @map("codespecie")
+
+  @@index([supplierId])
+  @@index([speciesCode])
+  @@map("titulos")
+}
