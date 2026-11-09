@@ -12,6 +12,7 @@ api.interceptors.response.use(
       error.response?.status === 401 &&
       !window.location.pathname.includes("/login")
     ) {
+      localStorage.removeItem("@queiroz:supplier");
       window.location.href = "/login";
     }
     return Promise.reject(error);
