@@ -1,7 +1,20 @@
 import { api } from "@/lib/api";
-import type { FetchPendingTitlesResponse } from "@/types/titles";
+import type {
+  FetchPendingTitlesResponse,
+  TitleStatusFilter,
+} from "@/types/titles";
 
-export async function fetchPendingTitles(): Promise<FetchPendingTitlesResponse> {
-  const response = await api.get<FetchPendingTitlesResponse>("/titles");
+export interface FetchPendingTitlesParams {
+  page?: number;
+  limit?: number;
+  status?: TitleStatusFilter;
+}
+
+export async function fetchPendingTitles(
+  params?: FetchPendingTitlesParams,
+): Promise<FetchPendingTitlesResponse> {
+  const response = await api.get<FetchPendingTitlesResponse>("/titles", {
+    params,
+  });
   return response.data;
 }

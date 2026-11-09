@@ -2,16 +2,25 @@ import { useEffect, useState } from "react";
 import { CircleAlert, RefreshCw } from "lucide-react";
 import { getStoredSupplier } from "@/services/auth.service";
 import { fetchPendingTitles } from "@/services/titles.service";
-import type { FetchPendingTitlesResponse } from "@/types/titles";
+import type {
+  FetchPendingTitlesResponse,
+  TitleStatusFilter,
+} from "@/types/titles";
 import { DashboardHeader } from "./components/dashboard-header";
 import { SummaryCards } from "./components/summary-cards";
 import { TitlesTable } from "./components/titles-table";
+import { PaginationControls } from "./components/pagination-controls";
+import { StatusFilterTabs } from "./components/status-filter-tabs";
 
 export function DashboardPage() {
   const supplier = getStoredSupplier();
 
   const [data, setData] = useState<FetchPendingTitlesResponse | null>(null);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [status, setStatus] = useState<TitleStatusFilter>("ALL");
   const [isLoading, setIsLoading] = useState(true);
+  const [isFetchingPage, setIsFetchingPage] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -20,7 +29,14 @@ export function DashboardPage() {
 
     async function loadData() {
       try {
-        const response = await fetchPendingTitles();
+        if (!data) {
+          setIsLoading(true);
+        } else {
+          setIsFetchingPage(true);
+        }
+
+        const response = await fetchPendingTitles({ page, limit, status });
+
         if (!ignore) {
           setData(response);
           setErrorMessage(null);
@@ -34,6 +50,7 @@ export function DashboardPage() {
       } finally {
         if (!ignore) {
           setIsLoading(false);
+          setIsFetchingPage(false);
         }
       }
     }
@@ -43,19 +60,44 @@ export function DashboardPage() {
     return () => {
       ignore = true;
     };
-  }, [reloadKey]);
+  }, [page, limit, status, reloadKey]);
 
   function handleReload() {
-    setIsLoading(true);
     setErrorMessage(null);
     setReloadKey((prev) => prev + 1);
   }
 
+  function handlePageChange(newPage: number) {
+    setPage(newPage);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function handleLimitChange(newLimit: number) {
+    setLimit(newLimit);
+    setPage(1);
+  }
+
+  function handleStatusChange(newStatus: TitleStatusFilter) {
+    setStatus(newStatus);
+    setPage(1);
+  }
+
   return (
     <div className="min-h-screen bg-background">
+      {/* Skip Link para navegadores e tecnologias assistivas */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-xl focus:bg-primary focus:px-4 focus:py-2.5 focus:text-xs focus:font-bold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white"
+      >
+        Pular para o conteúdo principal
+      </a>
+
       <DashboardHeader supplier={supplier} />
 
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+      <main
+        id="main-content"
+        className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8"
+      >
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-[28px]">
             Minhas pendências
@@ -68,19 +110,20 @@ export function DashboardPage() {
         {errorMessage && (
           <div
             role="alert"
+            aria-live="assertive"
             className="mt-6 flex flex-col gap-3 rounded-2xl border border-danger-strong/20 bg-danger-soft p-5 text-danger-strong sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="flex items-center gap-3 text-sm font-medium">
-              <CircleAlert className="h-5 w-5 shrink-0" />
+              <CircleAlert className="h-5 w-5 shrink-0" aria-hidden="true" />
               <span>{errorMessage}</span>
             </div>
 
             <button
               type="button"
               onClick={handleReload}
-              className="inline-flex items-center justify-center gap-2 self-start rounded-xl bg-surface px-4 py-2 text-xs font-semibold text-foreground shadow-xs transition hover:bg-muted cursor-pointer sm:self-auto"
+              className="inline-flex items-center justify-center gap-2 self-start rounded-xl bg-surface px-4 py-2 text-xs font-semibold text-foreground shadow-xs transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-pointer sm:self-auto"
             >
-              <RefreshCw className="h-3.5 w-3.5" />
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
               <span>Tentar novamente</span>
             </button>
           </div>
@@ -102,17 +145,54 @@ export function DashboardPage() {
         ) : (
           data && (
             <>
+              {/* Resumo financeiro calculado sobre o total global do fornecedor */}
               <SummaryCards summary={data.summary} />
 
               <section aria-labelledby="open-titles-heading" className="mt-8">
-                <h2
-                  id="open-titles-heading"
-                  className="mb-4 text-base font-bold text-foreground"
-                >
-                  Títulos em aberto
-                </h2>
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2
+                      id="open-titles-heading"
+                      className="text-base font-bold text-foreground"
+                    >
+                      Títulos em aberto
+                    </h2>
+                    {isFetchingPage && (
+                      <span
+                        aria-live="polite"
+                        className="text-xs font-medium text-muted-foreground animate-pulse"
+                      >
+                        Atualizando listagem...
+                      </span>
+                    )}
+                  </div>
 
-                <TitlesTable titles={data.titles} />
+                  <StatusFilterTabs
+                    selectedStatus={status}
+                    onSelectStatus={handleStatusChange}
+                    totalCount={data.summary.totalCount}
+                    overdueCount={data.summary.overdueCount}
+                    upcomingCount={data.summary.upcomingCount}
+                    isLoading={isFetchingPage}
+                  />
+                </div>
+
+                <div
+                  className={`transition-opacity duration-200 ${
+                    isFetchingPage
+                      ? "opacity-50 pointer-events-none"
+                      : "opacity-100"
+                  }`}
+                >
+                  <TitlesTable titles={data.titles} statusFilter={status} />
+                </div>
+
+                <PaginationControls
+                  pagination={data.pagination}
+                  onPageChange={handlePageChange}
+                  onLimitChange={handleLimitChange}
+                  isLoading={isFetchingPage}
+                />
               </section>
             </>
           )
