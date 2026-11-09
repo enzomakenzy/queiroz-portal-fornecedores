@@ -1,3 +1,3 @@
 export default function App() {
-  return <main>oi</main>;
+  return <main className="text-7xl">oi</main>;
 }
