@@ -104,6 +104,40 @@ async function seed() {
     skipDuplicates: true,
   });
 
+  await prisma.supplier.upsert({
+    where: { id: 5001 },
+    update: {},
+    create: {
+      id: 5001,
+      companyName: "LATICINIOS SERTAO NORDESTINO LTDA",
+      password: passwordHash,
+    },
+  });
+
+  await prisma.title.createMany({
+    data: [
+      {
+        id: 90000001,
+        supplierId: 5001,
+        speciesCode: "DVFORN", // Direito do Queiroz ('D') - Vencido
+        issueDate: parseBrDate("01/10/2026"),
+        dueDate: parseBrDate("25/10/2026"),
+        nominalValue: "450.00",
+        paidValue: "0.00",
+      },
+      {
+        id: 90000002,
+        supplierId: 5001,
+        speciesCode: "VBSELL", // Direito do Queiroz ('D') - A Vencer
+        issueDate: parseBrDate("01/11/2026"),
+        dueDate: parseBrDate("15/12/2026"),
+        nominalValue: "1200.50",
+        paidValue: "200.50", // Saldo em aberto = R$ 1.000,00
+      },
+    ],
+    skipDuplicates: true,
+  });
+
   console.log(
     `Seed finalizado: ${speciesData.length} espécies, ${suppliersMap.size} fornecedor(es) e ${titlesData.length} títulos processados.`,
   );
