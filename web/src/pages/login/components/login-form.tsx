@@ -51,6 +51,8 @@ export function LoginForm() {
     }
   }
 
+  const hasError = Boolean(errorMessage);
+
   return (
     <form onSubmit={handleSubmit} noValidate className="mt-7 space-y-5">
       <div>
@@ -69,6 +71,8 @@ export function LoginForm() {
           value={supplierCode}
           onChange={(e) => setSupplierCode(e.target.value)}
           disabled={isSubmitting}
+          aria-invalid={hasError}
+          aria-describedby={hasError ? "login-error-message" : undefined}
           className="w-full rounded-xl border border-input bg-surface px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/70 transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
         />
       </div>
@@ -89,19 +93,21 @@ export function LoginForm() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             disabled={isSubmitting}
+            aria-invalid={hasError}
+            aria-describedby={hasError ? "login-error-message" : undefined}
             className="w-full rounded-xl border border-input bg-surface py-3 pl-4 pr-11 text-sm text-foreground placeholder:text-muted-foreground/70 transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
           />
           <button
             type="button"
-            tabIndex={-1}
             onClick={() => setShowPassword((prev) => !prev)}
-            aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground cursor-pointer"
+            aria-label={showPassword ? "Ocultar senha" : "Exibir senha"}
+            aria-pressed={showPassword}
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-pointer"
           >
             {showPassword ? (
-              <EyeOff className="h-4 w-4" />
+              <EyeOff className="h-4 w-4" aria-hidden="true" />
             ) : (
-              <Eye className="h-4 w-4" />
+              <Eye className="h-4 w-4" aria-hidden="true" />
             )}
           </button>
         </div>
@@ -109,10 +115,12 @@ export function LoginForm() {
 
       {errorMessage && (
         <div
+          id="login-error-message"
           role="alert"
+          aria-live="assertive"
           className="flex items-center gap-2.5 rounded-xl bg-danger-soft px-4 py-3 text-xs font-medium text-danger-strong"
         >
-          <CircleAlert className="h-4 w-4 shrink-0" />
+          <CircleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span>{errorMessage}</span>
         </div>
       )}
@@ -120,11 +128,11 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={isSubmitting}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-sm font-semibold text-white transition hover:bg-primary-hover active:scale-[0.99] cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-sm font-semibold text-white transition hover:bg-primary-hover active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
       >
         {isSubmitting ? (
           <>
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             <span>Entrando...</span>
           </>
         ) : (

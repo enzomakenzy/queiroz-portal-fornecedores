@@ -56,9 +56,10 @@ export function DashboardHeader({ supplier }: DashboardHeaderProps) {
           type="button"
           onClick={handleLogout}
           disabled={isLoggingOut}
-          className="flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 text-xs font-semibold text-foreground transition hover:bg-muted active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+          aria-label="Sair da conta"
+          className="flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 text-xs font-semibold text-foreground transition hover:bg-muted active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
         >
-          <LogOut className="h-4 w-4" />
+          <LogOut className="h-4 w-4" aria-hidden="true" />
           <span>{isLoggingOut ? "Saindo..." : "Sair"}</span>
         </button>
       </div>
