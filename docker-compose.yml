@@ -72,21 +72,22 @@ services:
     networks:
       - internal
 
-  # Quando você criar o front-end (web), basta descomentar este bloco:
-  # web:
-  #   build:
-  #     context: ./web
-  #     dockerfile: Dockerfile
-  #   restart: unless-stopped
-  #   profiles:
-  #     - production
-  #   depends_on:
-  #     api:
-  #       condition: service_healthy
-  #   ports:
-  #     - "${WEB_PORT:-5173}:80"
-  #   networks:
-  #     - internal
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    restart: unless-stopped
+    profiles:
+      - production
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-3333}:80"
+    networks:
+      - internal
 
 volumes:
   pgdata:
