@@ -3,10 +3,12 @@ import { AppModule } from "./app.module";
 import { EnvService } from "./infra/env/env.service";
 import cookieParser from "cookie-parser";
 import { GlobalExceptionFilter } from "./infra/https/global-filter-exception";
+import helmet from "helmet";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useGlobalFilters(new GlobalExceptionFilter());
+  app.use(helmet());
 
   app.use(cookieParser());
   app.enableCors({
