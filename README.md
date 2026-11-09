@@ -233,9 +233,14 @@ Embora tenham sido fornecidos apenas 2 arquivos CSV (`consulta1_titulos.csv` e `
 - Em vez de criar apenas duas tabelas desnormalizadas, modelei o banco em **3 tabelas relacionais** (`fornecedores`, `especies` e `titulos`), mantendo os nomes de colunas originais do ERP via diretiva `@map` do Prisma.
 - Isso elimina redundância de texto, garante integridade referencial via chaves estrangeiras (`FOREIGN KEY`) e armazena a credencial de acesso (`senha` com hash bcrypt) diretamente na entidade `fornecedores`.
 
-### 4. Consultas em SQL Puro com `INNER JOIN` e Tipo `Decimal(10, 2)`
-- **SQL Explícito:** Em atendimento direto ao Requisito 1 (*"As consultas devem usar SQL e relacionar as duas tabelas"*), o método `findPendingBySupplierId` no `PrismaTitlesRepository` utiliza `$queryRaw` executando um `SELECT` com `INNER JOIN` entre `titulos` e `especies`, filtrando `e.obrigdireito = 'D'` e `(t.vlrnominal - t.vlrpago) > 0` diretamente no motor do PostgreSQL.
-- **Precisão Financeira:** Valores monetários foram modelados como `Decimal(10, 2)` no banco para evitar erros clássicos de arredondamento de ponto flutuante (`Float`).
+### 4. Por que usar o Prisma se o teste exigia consultas em SQL Puro?
+O Requisito 1 do edital especifica: *"A criação das tabelas e a carga dos dados dos CSVs devem vir nas migrations (ou seeds) do projeto [...] As consultas devem usar SQL e relacionar as duas tabelas."*
+
+A decisão de utilizar o **Prisma ORM 7** em conjunto com **SQL Nativo (`$queryRaw`)** foi tomada para unir rigor técnico, segurança e atendimento estrito ao edital:
+- **Atendimento estrito ao requisito de SQL:** Para o domínio de títulos e pendências financeiras, **não foi utilizada a API de abstração de alto nível do ORM** (`prisma.title.findMany`). Todas as consultas analíticas aos títulos (`findPendingBySupplierId`) e ao resumo global (`getPendingSummaryBySupplierId`) foram escritas em **SQL relacional puro com `INNER JOIN`**, `WHERE`, `ORDER BY`, `LIMIT`/`OFFSET` e funções de agregação (`SUM`, `COUNT`, `COALESCE`) executadas diretamente pelo PostgreSQL.
+- **Proteção Nativa contra SQL Injection:** Executar SQL manual via concatenação simples de strings expõe a aplicação a vulnerabilidades graves. O método `$queryRaw` com `Prisma.sql` compõe as queries utilizando *prepared statements* parametrizados (`$1`, `$2`) diretamente no driver `node-postgres`, garantindo imunidade a ataques de SQL Injection.
+- **Governança de Migrations e DDL:** O Prisma foi empregado como gerenciador de ciclo de vida do banco (gerando arquivos SQL reais em `prisma/migrations/`) e gerador de tipos TypeScript, mantendo a integridade referencial com chaves estrangeiras e índices sem que o desenvolvedor precise abrir mão do controle do SQL.
+- **Precisão Financeira:** Viabilizou a modelagem rigorosa dos valores monetários como `Decimal(10, 2)` no PostgreSQL, prevenindo desvios clássicos de arredondamento de ponto flutuante (`Float`).
 
 ### 5. Autenticação via Cookie `httpOnly` e Isolamento Estrito (Zero IDOR)
 - Em vez de trafegar o token JWT exposto no `localStorage` (vulnerável a ataques XSS), o endpoint `POST /auth/login` assina o token e o armazena em um **Cookie `httpOnly`** (`sameSite: 'lax'`).
