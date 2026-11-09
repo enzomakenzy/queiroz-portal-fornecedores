@@ -1,5 +1,9 @@
 import { Injectable } from "@nestjs/common";
-import { TitlesRepository } from "../repositories/title.repository";
+import {
+  PendingTitlesSummary,
+  TitleStatusFilter,
+  TitlesRepository,
+} from "../repositories/title.repository";
 
 export type TitleStatus = "OVERDUE" | "UPCOMING";
 
@@ -15,17 +19,23 @@ export interface PendingTitleItem {
   status: TitleStatus;
 }
 
+export interface PaginationMeta {
+  page: number;
+  limit: number;
+  totalCount: number;
+  totalPages: number;
+}
+
 interface FetchPendingTitlesUseCaseRequest {
   supplierId: number;
+  page?: number;
+  limit?: number;
+  status?: TitleStatusFilter;
 }
 
 export interface FetchPendingTitlesUseCaseResponse {
-  summary: {
-    totalOpenAmount: number;
-    totalOverdueAmount: number;
-    totalUpcomingAmount: number;
-    totalCount: number;
-  };
+  summary: PendingTitlesSummary;
+  pagination: PaginationMeta;
   titles: PendingTitleItem[];
 }
 
@@ -35,9 +45,12 @@ export class FetchPendingTitlesUseCase {
 
   async execute({
     supplierId,
+    page = 1,
+    limit = 10,
+    status = "ALL",
   }: FetchPendingTitlesUseCaseRequest): Promise<FetchPendingTitlesUseCaseResponse> {
-    const rawTitles =
-      await this.titlesRepository.findPendingBySupplierId(supplierId);
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.max(1, Math.min(100, limit));
 
     // Data de hoje zerada em UTC (YYYY-MM-DDT00:00:00.000Z) para comparação justa de datas
     const now = new Date();
@@ -45,9 +58,30 @@ export class FetchPendingTitlesUseCase {
       Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()),
     );
 
-    let totalOpenAmount = 0;
-    let totalOverdueAmount = 0;
-    let totalUpcomingAmount = 0;
+    const [summary, rawTitles] = await Promise.all([
+      this.titlesRepository.getPendingSummaryBySupplierId(
+        supplierId,
+        todayUtc,
+      ),
+      this.titlesRepository.findPendingBySupplierId(supplierId, {
+        page: safePage,
+        limit: safeLimit,
+        status,
+        referenceDate: todayUtc,
+      }),
+    ]);
+
+    const filteredTotalCount =
+      status === "OVERDUE"
+        ? summary.overdueCount
+        : status === "UPCOMING"
+          ? summary.upcomingCount
+          : summary.totalCount;
+
+    const totalPages = Math.max(
+      1,
+      Math.ceil(filteredTotalCount / safeLimit),
+    );
 
     const titles: PendingTitleItem[] = rawTitles.map((title) => {
       const openAmount = Number(
@@ -55,14 +89,7 @@ export class FetchPendingTitlesUseCase {
       );
 
       const isOverdue = title.dueDate.getTime() < todayUtc.getTime();
-      const status: TitleStatus = isOverdue ? "OVERDUE" : "UPCOMING";
-
-      totalOpenAmount += openAmount;
-      if (isOverdue) {
-        totalOverdueAmount += openAmount;
-      } else {
-        totalUpcomingAmount += openAmount;
-      }
+      const itemStatus: TitleStatus = isOverdue ? "OVERDUE" : "UPCOMING";
 
       return {
         id: title.id,
@@ -73,16 +100,17 @@ export class FetchPendingTitlesUseCase {
         nominalValue: title.nominalValue,
         paidValue: title.paidValue,
         openAmount,
-        status,
+        status: itemStatus,
       };
     });
 
     return {
-      summary: {
-        totalOpenAmount: Number(totalOpenAmount.toFixed(2)),
-        totalOverdueAmount: Number(totalOverdueAmount.toFixed(2)),
-        totalUpcomingAmount: Number(totalUpcomingAmount.toFixed(2)),
-        totalCount: titles.length,
+      summary,
+      pagination: {
+        page: safePage,
+        limit: safeLimit,
+        totalCount: filteredTotalCount,
+        totalPages,
       },
       titles,
     };
