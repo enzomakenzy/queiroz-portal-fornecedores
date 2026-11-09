@@ -42,11 +42,14 @@ export class JwtStrategyService extends PassportStrategy(Strategy) {
 
     const userPayload = result.data;
 
-    const user = await this.prisma.supplier.findUnique({
-      where: { id: userPayload.sub },
-    });
+    const rows = await this.prisma.$queryRaw<Array<{ id: number }>>`
+      SELECT seqpessoa AS "id"
+      FROM fornecedores
+      WHERE seqpessoa = ${userPayload.sub}
+      LIMIT 1
+    `;
 
-    if (!user) {
+    if (!rows[0]) {
       throw new UnauthorizedException("User not found");
     }
 

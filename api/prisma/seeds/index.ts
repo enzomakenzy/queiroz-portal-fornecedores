@@ -33,7 +33,7 @@ function parseBrDecimal(valueStr: string): string {
 }
 
 async function seed() {
-  // 1. Ler e popular a tabela Species (consulta2_especies.csv)
+  // 1. Ler e popular a tabela Species com SQL Nativo (consulta2_especies.csv)
   const speciesLines = readCsvLines("consulta2_especies.csv");
   const speciesData = speciesLines.map((line) => {
     const [code, description, type] = line.split(";");
@@ -44,12 +44,15 @@ async function seed() {
     };
   });
 
-  await prisma.species.createMany({
-    data: speciesData,
-    skipDuplicates: true,
-  });
+  for (const item of speciesData) {
+    await prisma.$executeRaw`
+      INSERT INTO especies (codespecie, descricao, obrigdireito)
+      VALUES (${item.code}, ${item.description}, ${item.type}::obrigdireito_enum)
+      ON CONFLICT (codespecie) DO NOTHING
+    `;
+  }
 
-  // 2. Ler o CSV de títulos e separar Fornecedores (normalizado) dos Títulos
+  // 2. Ler o CSV de títulos e normalizar Fornecedores (3FN)
   const titlesLines = readCsvLines("consulta1_titulos.csv");
   const suppliersMap = new Map<number, string>();
 
@@ -67,7 +70,6 @@ async function seed() {
 
     const supplierId = Number(seqpessoa);
 
-    // Guarda o fornecedor único (normalização 3FN)
     if (!suppliersMap.has(supplierId)) {
       suppliersMap.set(supplierId, nomerazao);
     }
@@ -83,63 +85,52 @@ async function seed() {
     };
   });
 
-  // 3. Popular os Fornecedores extraídos com a senha padrão (queiroz@2026)
+  // 3. Popular os Fornecedores com SQL Nativo (senha padrão: queiroz@2026)
   const passwordHash = await hash("queiroz@2026", 8);
 
   for (const [id, companyName] of suppliersMap.entries()) {
-    await prisma.supplier.upsert({
-      where: { id },
-      update: { companyName },
-      create: {
-        id,
-        companyName,
-        password: passwordHash,
-      },
-    });
+    await prisma.$executeRaw`
+      INSERT INTO fornecedores (seqpessoa, nomerazao, senha)
+      VALUES (${id}, ${companyName}, ${passwordHash})
+      ON CONFLICT (seqpessoa) DO UPDATE
+      SET nomerazao = EXCLUDED.nomerazao
+    `;
   }
 
-  // 4. Popular todos os Títulos relacionando com Supplier e Species
-  await prisma.title.createMany({
-    data: titlesData,
-    skipDuplicates: true,
-  });
+  // 4. Popular os Títulos com SQL Nativo
+  for (const title of titlesData) {
+    await prisma.$executeRaw`
+      INSERT INTO titulos (seqtitulo, seqpessoa, codespecie, dtaemissao, dtavencimento, vlrnominal, vlrpago)
+      VALUES (
+        ${title.id},
+        ${title.supplierId},
+        ${title.speciesCode},
+        ${title.issueDate}::date,
+        ${title.dueDate}::date,
+        ${title.nominalValue}::decimal,
+        ${title.paidValue}::decimal
+      )
+      ON CONFLICT (seqtitulo) DO NOTHING
+    `;
+  }
 
-  await prisma.supplier.upsert({
-    where: { id: 5001 },
-    update: {},
-    create: {
-      id: 5001,
-      companyName: "LATICINIOS SERTAO NORDESTINO LTDA",
-      password: passwordHash,
-    },
-  });
+  // 5. Fornecedor extra 5001 para testes de isolamento de dados
+  await prisma.$executeRaw`
+    INSERT INTO fornecedores (seqpessoa, nomerazao, senha)
+    VALUES (5001, 'LATICINIOS SERTAO NORDESTINO LTDA', ${passwordHash})
+    ON CONFLICT (seqpessoa) DO NOTHING
+  `;
 
-  await prisma.title.createMany({
-    data: [
-      {
-        id: 90000001,
-        supplierId: 5001,
-        speciesCode: "DVFORN", // Direito do Queiroz ('D') - Vencido
-        issueDate: parseBrDate("01/10/2026"),
-        dueDate: parseBrDate("25/10/2026"),
-        nominalValue: "450.00",
-        paidValue: "0.00",
-      },
-      {
-        id: 90000002,
-        supplierId: 5001,
-        speciesCode: "VBSELL", // Direito do Queiroz ('D') - A Vencer
-        issueDate: parseBrDate("01/11/2026"),
-        dueDate: parseBrDate("15/12/2026"),
-        nominalValue: "1200.50",
-        paidValue: "200.50", // Saldo em aberto = R$ 1.000,00
-      },
-    ],
-    skipDuplicates: true,
-  });
+  await prisma.$executeRaw`
+    INSERT INTO titulos (seqtitulo, seqpessoa, codespecie, dtaemissao, dtavencimento, vlrnominal, vlrpago)
+    VALUES
+      (90000001, 5001, 'DVFORN', '2026-10-01'::date, '2026-10-25'::date, 450.00::decimal, 0.00::decimal),
+      (90000002, 5001, 'VBSELL', '2026-11-01'::date, '2026-12-15'::date, 1200.50::decimal, 200.50::decimal)
+    ON CONFLICT (seqtitulo) DO NOTHING
+  `;
 
   console.log(
-    `Seed finalizado: ${speciesData.length} espécies, ${suppliersMap.size} fornecedor(es) e ${titlesData.length} títulos processados.`,
+    `Seed finalizado com SQL nativo: ${speciesData.length} espécies, ${suppliersMap.size} fornecedor(es) e ${titlesData.length} títulos processados.`,
   );
 }
 
