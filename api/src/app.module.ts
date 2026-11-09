@@ -6,6 +6,7 @@ import { DatabaseModule } from "./infra/database/database.module";
 import { AuthModule } from "./infra/auth/auth.module";
 import { CryptographyModule } from "./infra/cryptography/cryptography.module";
 import { SupplierModule } from "./modules/supplier/supplier.module";
+import { TitlesModule } from "./modules/titles/title.module";
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { SupplierModule } from "./modules/supplier/supplier.module";
     AuthModule,
     CryptographyModule,
     SupplierModule,
+    TitlesModule,
   ],
   controllers: [],
   providers: [],
