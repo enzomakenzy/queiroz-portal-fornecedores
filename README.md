@@ -42,6 +42,7 @@ Seguindo estritamente o contexto do negócio, o portal aplica três filtros fund
 - **Bcrypt.js** (Hashing seguro de senhas)
 - **Zod** (Validação estrita de payloads de entrada e variáveis de ambiente)
 - **Helmet** (Proteção de cabeçalhos HTTP)
+- **@nestjs/throttler** (Rate Limiting contra ataques de força bruta e DoS)
 
 ### Front-end (`web/`)
 - **React 19** + **TypeScript** + **Vite 8**
@@ -178,23 +179,30 @@ Caso prefira subir apenas o banco de dados no Docker e executar o Back-end e o F
 
 ## 🗄️ Como Rodar as Migrations e Popular o Banco (Seeds)
 
-O processo de criação das tabelas e carga dos arquivos CSV (`consulta1_titulos.csv` e `consulta2_especies.csv`) foi projetado para ser **100% automatizado e idempotente** (`upsert` / `skipDuplicates`):
+> [!NOTE]
+> Se você seguiu qualquer uma das duas opções da seção anterior (**Docker** ou **Ambiente Local**), **você não precisa executar nada aqui**: o banco de dados já foi automaticamente criado, migrado e populado com os dados dos arquivos CSV e os usuários de teste.
 
-- **Via Docker (`npm run docker:prod`):** O serviço `migrator` no `docker-compose.yml` aguarda o `healthcheck` do PostgreSQL e executa automaticamente:
-  ```bash
-  npx prisma migrate deploy && npx prisma db seed
-  ```
-- **Manualmente no ambiente local (dentro da pasta `api/`):**
-  ```bash
-  # 1. Gera os artefatos de tipagem do Prisma Client 7
-  npx prisma generate
+Esta seção descreve como esse ciclo funciona por baixo dos panos e como você pode re-executá-lo manualmente caso deseje resetar ou inspecionar o estado do banco.
 
-  # 2. Aplica as migrations SQL criando as tabelas fornecedores, especies e titulos
-  npx prisma migrate deploy
+### Como a carga funciona por padrão:
+- **No Docker (`npm run docker:prod`):** O serviço desacoplado `migrator` aguarda o *healthcheck* do PostgreSQL ficar saudável e dispara `npx prisma migrate deploy && npx prisma db seed` antes da inicialização da API.
+- **Idempotência Garantida:** O script em `api/prisma/seeds/index.ts` utiliza operações de `upsert` e `skipDuplicates`. As migrations e seeds podem ser executadas repetidas vezes sem risco de duplicação de registros ou violação de chaves.
 
-  # 3. Lê os CSVs em api/prisma/seeds/data/, normaliza os dados e popula o banco
-  npx prisma db seed
-  ```
+### Comandos manuais (para reset ou validação isolada):
+Caso deseje inspecionar as tabelas ou forçar uma nova execução manual a partir da pasta `api/`:
+
+```bash
+cd api
+
+# 1. Gera os artefatos de tipagem do Prisma Client 7
+npx prisma generate
+
+# 2. Aplica as migrations SQL criando as tabelas (fornecedores, especies, titulos)
+npx prisma migrate deploy
+
+# 3. Lê os CSVs em api/prisma/seeds/data/, normaliza os dados e popula o banco
+npx prisma db seed
+```
 
 ---
 
@@ -204,7 +212,7 @@ Para cumprir o **Requisito 3** e permitir a validação prática do **Requisito 
 
 | Código do Fornecedor (`Usuário`) | Senha | Razão Social | Finalidade no Teste |
 | :---: | :---: | :--- | :--- |
-| **`4827`** | `queiroz@2026` | `DISTRIBUIDORA EXEMPLO ALIMENTOS LTDA` | **Usuário oficial exigido no PDF.** Possui 92 títulos brutos no CSV, dos quais **32 são débitos (`D`) em aberto** exibidos no portal. |
+| **`4827`** | `queiroz@2026` | `DISTRIBUIDORA EXEMPLO ALIMENTOS LTDA` | **Usuário oficial exigido no PDF.** Possui 92 títulos brutos no CSV, dos quais **34 são débitos (`D`) em aberto** exibidos no portal. |
 | **`5001`** | `queiroz@2026` | `LATICINIOS SERTAO NORDESTINO LTDA` | **Fornecedor extra criado no seed** com 2 títulos próprios (`R$ 450,00` vencido e `R$ 1.000,00` a vencer) exclusivamente para comprovar que cada fornecedor enxerga apenas os seus próprios títulos. |
 
 ---
@@ -237,6 +245,23 @@ Embora tenham sido fornecidos apenas 2 arquivos CSV (`consulta1_titulos.csv` e `
 - **Datas em UTC:** Datas financeiras (`dtaemissao` e `dtavencimento`) são salvas e formatadas em UTC (`timeZone: 'UTC'` no `Intl.DateTimeFormat`), evitando que o fuso horário local do navegador (`GMT-3`) recue a data em 1 dia na virada da meia-noite.
 - **UX Mobile-First:** Tabelas financeiras com 6 colunas costumam quebrar ou exigir zoom desconfortável em smartphones. Por isso, a listagem de títulos adota uma **visualização dual**: em Desktop e Tablet (`>= 768px`) exibe uma tabela estruturada, e em telas Mobile (`< 768px`) transforma-se automaticamente em cartões individuais verticais de fácil leitura.
 
+### 7. Paginação e Filtragem Server-Side com Agregação Global em SQL Puro
+- **Preservação da Regra de Negócio:** O Requisito 5 exige que o fornecedor veja o *valor total em aberto com o Grupo Queiroz*. Uma paginação e filtragem ingênua que calcula o resumo apenas sobre os dados da página/filtro quebraria esse requisito. Por isso, os cards superiores refletem permanentemente os totais consolidados do fornecedor.
+- **Consultas em Paralelo e Contadores Dinâmicos:** No `PrismaTitlesRepository`, a API executa duas queries SQL via `$queryRaw` em paralelo com `Promise.all`:
+  1. **Query de Agregação:** Calcula diretamente no PostgreSQL (`SUM` e `COUNT`) o montante total em aberto, o total vencido, o total a vencer e as quantidades exatas por status (`totalCount`, `overdueCount`, `upcomingCount`). Isso alimenta os badges de contagem das abas de filtro (**Todos**, **Vencidos** e **A vencer**) sem requisições adicionais.
+  2. **Query da Fatia Paginada e Filtrada:** Aplica a cláusula condicional de status via `Prisma.sql` (`AND t.dtavencimento < refDate` para vencidos ou `>= refDate` para a vencer) e retorna apenas a fatia solicitada usando `LIMIT` e `OFFSET` com ordenação determinística (`ORDER BY t.dtavencimento ASC, t.seqtitulo ASC`).
+- **Controle Flexível e Feedback Visual:** O fornecedor pode alternar entre abas de status (`Todos`, `Vencidos`, `A vencer`), alterar o limite por página (`10`, `20` ou `50/Todos`) e contar com reset automático de página e mensagens contextuais para estados vazios.
+
+### 8. Acessibilidade Completa (WCAG 2.1 Nível AA e WAI-ARIA)
+- **Internacionalização Semântica:** Tag `<html lang="pt-BR">` para garantir que tecnologias assistivas (leitores de tela como NVDA, JAWS e VoiceOver) façam a pronúncia correta de valores monetários em Reais e datas no formato brasileiro.
+- **Skip Link:** Inclusão de atalho invisível no topo da página (*"Pular para o conteúdo principal"*) que se torna visível ao pressionar `Tab`, permitindo que usuários que navegam exclusivamente via teclado acessem as pendências sem percorrer todo o cabeçalho repetidamente.
+- **Navegação por Teclado e Foco Visível:** Todos os elementos interativos possuem anel de foco destacado (`focus-visible:ring-2 focus-visible:ring-primary`), remoção de `tabIndex={-1}` indevido no botão de exibição de senha com estado `aria-pressed`, além de atributos `aria-invalid` e `aria-describedby` conectados às mensagens de erro dinâmicas.
+- **Semântica de Tabelas, Abas e Live Regions:** A tabela de títulos inclui `<caption className="sr-only">`, cabeçalhos de linha semânticos (`<th scope="row">`), cartões mobile com `aria-label` descritivo, grupo de abas acessível (`role="group"` com `aria-pressed`) e regiões `aria-live="polite"` que anunciam as mudanças de página e contagens para leitores de tela sem interromper a navegação.
+
+### 9. Proteção contra Força Bruta e Abusos com Rate Limiting (@nestjs/throttler)
+- **Mitigação de Força Bruta e DoS:** Para proteger os endpoints da API contra tentativas automatizadas de adivinhação de senhas (*credential stuffing* / *brute force*) e sobrecarga de requisições, foi integrado o módulo `@nestjs/throttler` com `ThrottlerGuard` global via `APP_GUARD`.
+- **Experiência sem Bloqueios Inadvertidos:** O limitador atua com janelas de tempo em memória retornando `429 Too Many Requests` caso o limiar de segurança seja ultrapassado, sem prejudicar o uso legítimo do fornecedor ao paginar ou aplicar filtros sucessivos.
+
 ---
 
 ## 🔮 O Que Eu Faria a Mais se Tivesse Mais Tempo
@@ -245,21 +270,21 @@ Pensando nos próximos passos de evolução desta primeira versão para um ambie
 
 ### No Back-end (`api/`)
 1. **Testes Automatizados (Unitários e E2E):**
-   - Implementação de testes unitários (com Jest/Vitest e repositórios *in-memory*) para os casos de uso `AuthenticateUseCase` e `FetchPendingTitlesUseCase`, validando cenários de borda (títulos parciais, títulos do tipo `'O'`, credenciais incorretas).
-   - Testes End-to-End (E2E) com Supertest validando o fluxo completo de cookie `httpOnly`, bloqueio de rotas não autenticadas (`401`) e isolamento entre os fornecedores `4827` e `5001`.
-2. **Paginação Server-Side e Filtros Avançados na API:**
-   - Adição de paginação (`page` e `limit`) e filtros por status (`OVERDUE` / `UPCOMING`), período de vencimento e espécie na rota `GET /titles`, mantendo o cálculo do resumo global separado da fatia paginada.
-3. **Rate Limiting e Refresh Token:**
-   - Adição do `@nestjs/throttler` na rota `/auth/login` para mitigação contra ataques de força bruta e implementação de rotação de *Refresh Tokens*.
+   - Implementação de testes unitários (com Jest/Vitest e repositórios *in-memory*) para os casos de uso `AuthenticateUseCase` e `FetchPendingTitlesUseCase`, validando cenários de borda (títulos parciais, títulos do tipo `'O'`, filtros por status, cálculo de páginas e credenciais incorretas).
+   - Testes End-to-End (E2E) com Supertest validando o fluxo completo de cookie `httpOnly`, bloqueio de rotas não autenticadas (`401`), parâmetros inválidos de paginação/filtro (`400`) e isolamento entre os fornecedores `4827` e `5001`.
+2. **Filtros Adicionais na API:**
+   - Adição de filtros opcionais por período de emissão/vencimento (intervalo de datas) e por espécie (`codespecie`), permitindo consultas analíticas detalhadas.
+3. **Rotação de Refresh Tokens e Revogação Ativa de Sessões:**
+   - Implementação de *Refresh Tokens* com rotação automática persistida no banco ou cache Redis para possibilitar revogação instantânea de sessões ativas sem depender unicamente da expiração do JWT.
 4. **Documentação Interativa com Swagger (OpenAPI):**
    - Exposição dos contratos de entrada e saída em `/api/docs` com `@nestjs/swagger`.
 
 ### No Front-end (`web/`)
-1. **Filtro por Status, Busca Rápida e Paginação na Tabela:**
-   - Controles visuais para filtrar rapidamente entre títulos **Todos**, **Vencidos** e **A vencer**, busca pelo número do título (`seqtitulo`) e paginação da listagem para fornecedores com grande volume de títulos, evitando rolagem extensa.
+1. **Busca Rápida por Número do Título:**
+   - Campo de busca textual com *debounce* para filtragem imediata pelo número do título (`seqtitulo`) ou descrição da espécie.
 2. **Exportação de Relatório (CSV / PDF):**
-   - Botão para o fornecedor baixar o extrato atualizado das suas pendências em PDF ou planilha Excel/CSV para conciliação interna da sua equipe financeira.
+   - Botão para o fornecedor baixar o extrato consolidado de todas as suas pendências em PDF ou planilha Excel/CSV para conciliação contábil interna.
 3. **Gerenciamento de Estado Assíncrono com TanStack Query (React Query):**
-   - Cache inteligente, revalidação automática ao focar na janela (*refetch on window focus*) e paginação com *prefetching*.
+   - Cache inteligente, revalidação automática ao focar na janela (*refetch on window focus*) e *prefetching* da próxima página de títulos durante a navegação.
 4. **Fluxo de Troca de Senha no Primeiro Acesso:**
    - Como os fornecedores iniciam com uma senha padrão (`queiroz@2026`), um modal ou rota obrigatória de redefinição de senha no primeiro login elevaria a segurança operacional do portal.
