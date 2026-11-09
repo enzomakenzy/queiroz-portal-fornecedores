@@ -19,7 +19,7 @@ Aplicação Full-Stack desenvolvida para o teste técnico de **Desenvolvedor Ful
 
 ---
 
-## 📌 Visão Geral e Regra de Negócio
+## Visão Geral e Regra de Negócio
 
 O ERP do Grupo Queiroz registra títulos financeiros de duas naturezas na tabela de espécies (`consulta2_especies.csv`):
 - **`O` (Obrigação do Queiroz):** valores que o Grupo Queiroz deve pagar ao fornecedor.
@@ -32,7 +32,7 @@ Seguindo estritamente o contexto do negócio, o portal aplica três filtros fund
 
 ---
 
-## 🚀 Tecnologias Utilizadas
+## Tecnologias Utilizadas
 
 ### Back-end (`api/`)
 - **Node.js 24** + **TypeScript**
@@ -56,7 +56,7 @@ Seguindo estritamente o contexto do negócio, o portal aplica três filtros fund
 
 ---
 
-## 📂 Estrutura do Repositório
+## Estrutura do Repositório
 
 O projeto está organizado como um monorepo contendo o back-end (`api/`) e o front-end (`web/`) claramente desacoplados:
 
@@ -94,7 +94,7 @@ queiroz-portal-fornecedores/
 
 ---
 
-## 🛠️ Como Instalar e Rodar o Projeto do Zero
+## Como Instalar e Rodar o Projeto do Zero
 
 Você pode avaliar o projeto de **duas formas**: rodando todo o ecossistema containerizado com **um único comando via Docker** (sem precisar instalar Node ou PostgreSQL na máquina) ou rodando em **modo de desenvolvimento local**.
 
@@ -177,7 +177,7 @@ Caso prefira subir apenas o banco de dados no Docker e executar o Back-end e o F
 
 ---
 
-## 🗄️ Como Rodar as Migrations e Popular o Banco (Seeds)
+## Como Rodar as Migrations e Popular o Banco (Seeds)
 
 > [!NOTE]
 > Se você seguiu qualquer uma das duas opções da seção anterior (**Docker** ou **Ambiente Local**), **você não precisa executar nada aqui**: o banco de dados já foi automaticamente criado, migrado e populado com os dados dos arquivos CSV e os usuários de teste.
@@ -206,7 +206,7 @@ npx prisma db seed
 
 ---
 
-## 🔐 Credenciais de Teste e Isolamento de Dados
+## Credenciais de Teste e Isolamento de Dados
 
 Para cumprir o **Requisito 3** e permitir a validação prática do **Requisito 4 (Segurança e Isolamento dos Dados)**, o script de seed prepara dois fornecedores distintos:
 
@@ -268,7 +268,7 @@ A decisão de arquitetura uniu o cumprimento estrito das exigências do teste co
 
 ---
 
-## 🔮 O Que Eu Faria a Mais se Tivesse Mais Tempo
+## O Que Eu Faria a Mais se Tivesse Mais Tempo
 
 Pensando nos próximos passos de evolução desta primeira versão para um ambiente de produção em larga escala no Grupo Queiroz:
 
